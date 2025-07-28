@@ -54,7 +54,7 @@ This will:
 
 
 
-## 🛠 Installing AWS Tools (Manually)
+## Installing AWS Tools (Manually)
 
 ```powershell
 Install-Module -Name AWS.Tools.Installer -Force
