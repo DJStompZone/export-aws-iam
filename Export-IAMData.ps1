@@ -51,6 +51,14 @@ if (-not (Test-Path -Path $ExportPath)) {
     New-Item -ItemType Directory -Path $ExportPath -Force | Out-Null
 }
 
+function Get-AWSToolsAvailablity {
+     param (
+         [string]$ToolName = "Get-IAMUserList"
+     )
+     $TestResults = $(get-command $ToolName -ErrorAction SilentlyContinue)
+     return $($TestResults -ne $null)
+ }
+
 function Export-IAMUserObject {
     param ($UserName)
     try {
@@ -150,24 +158,36 @@ function Erase-ExportDirectory {
 }
 
 function Export-IAMData {
-	if ($EraseFirst){
-		Erase-ExportDirectory -ForceErasure $Force
+	try {
+		if ($EraseFirst){
+			Erase-ExportDirectory -ForceErasure $Force
+		}
+		Write-Host "`n== Exporting IAM users from profile `'$($SourceProfile)`' =="
+		$users = Get-IAMUserList -ProfileName $SourceProfile
+
+		if (-not $users) {
+			Write-Warning "No users found in profile `'$($SourceProfile)`'."
+			exit 0
+		}
+
+		$users | ConvertTo-Json -Depth 5 | Set-Content "$($ExportPath)\users.json"
+
+		foreach ($user in $users) {
+			Export-IAMUserData -UserName $user.UserName
+		}
+
+		Write-Host "`nExport complete. Files saved to "$ExportPath
+	} catch {
+		if (-not (Get-AWSToolsAvailablity)) {
+			Write-Error "AWS Tools for PowerShell must be installed for this script to work correctly. For more information on how to install them manually, see here: https://aws.amazon.com/powershell/"
+			$Confirmation = Read-Host -Prompt "Attempt to install them now?"
+			if (-not $confirmation.ToLower().StartsWith("y")) {
+				Write-Host "Installation declined. The script will now exit."
+				exit 1
+			}
+			saps -v runas powershell -args '-noe -command "Install-Module -Name AWS.Tools.Installer -Force; start-sleep 2; saps -v runas powershell -args ''-noe -command \""Install-Module -Name AWS.Tools.IdentityManagement -Force; start-sleep 2; exit 0\""''; exit 0"'
+		}
 	}
-    Write-Host "`n== Exporting IAM users from profile `'$($SourceProfile)`' =="
-    $users = Get-IAMUserList -ProfileName $SourceProfile
-
-    if (-not $users) {
-        Write-Warning "No users found in profile `'$($SourceProfile)`'."
-        exit 0
-    }
-
-    $users | ConvertTo-Json -Depth 5 | Set-Content "$($ExportPath)\users.json"
-
-    foreach ($user in $users) {
-        Export-IAMUserData -UserName $user.UserName
-    }
-
-    Write-Host "`nExport complete. Files saved to "$ExportPath
 }
 
 Export-IAMData
